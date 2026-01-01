@@ -138,12 +138,14 @@ a{color:inherit}
   font-size: 26px;
   font-weight: 900;
   background: transparent;
-  color: var(--text);
+  color: var(--brand2);
+  letter-spacing: 0.3px;
 }
 .unit{
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--muted);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand2);
+  opacity: 0.9;
   white-space: nowrap;
 }
 .hint{

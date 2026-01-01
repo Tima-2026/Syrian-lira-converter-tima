@@ -15,10 +15,32 @@ const quickOld = [
 
 const denomsNew = [10, 25, 50, 100, 200, 500];
 
-function toNumber(s: string) {
-  const cleaned = s.replace(/,/g, ".").replace(/\s+/g, "").trim();
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : NaN;
+// يحوّل الأرقام العربية/الفارسية إلى 0-9
+function normalizeDigits(input: string) {
+  const map: Record<string, string> = {
+    "٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9",
+    "۰":"0","۱":"1","۲":"2","۳":"3","۴":"4","۵":"5","۶":"6","۷":"7","۸":"8","۹":"9",
+  };
+  return input.replace(/[٠-٩۰-۹]/g, (d) => map[d] ?? d);
+}
+
+// يرجّع فقط الأرقام بدون أي فواصل
+function toRawInt(input: string) {
+  const s = normalizeDigits(input)
+    .replace(/[,\s،٬]/g, "") // فواصل الآلاف
+    .replace(/[^\d]/g, "")  // أي شيء غير رقم
+    .trim();
+  return s;
+}
+
+// تنسيق مع فواصل 88,888
+function fmtIntWithCommas(rawDigits: string) {
+  if (!rawDigits) return "";
+  const n = Number(rawDigits);
+  if (!Number.isFinite(n)) return "";
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 function fmt(n: number) {
@@ -31,23 +53,27 @@ function fmt(n: number) {
 }
 
 export default function Page() {
-  const [oldAmount, setOldAmount] = useState<string>("5000");
+  const [oldAmount, setOldAmount] = useState<string>("");
   const [denom, setDenom] = useState<number>(10);
 
   const computed = useMemo(() => {
-    const oldN = toNumber(oldAmount);
-    if (!Number.isFinite(oldN) || oldN < 0) {
-      return { oldN: NaN, newN: NaN, notes: 0, remainder: 0 };
-    }
-    const newN = oldN / RATE;
+  const raw = toRawInt(oldAmount);          // "88,888" أو "٨٨٨٨٨" -> "88888"
+  const oldN = raw ? Number(raw) : NaN;
 
-    // توزيع الأوراق على أساس الليرة الجديدة
-    const d = denom;
-    const notes = d > 0 ? Math.floor(newN / d) : 0;
-    const remainder = d > 0 ? (newN - notes * d) : newN;
+  if (!Number.isFinite(oldN) || oldN < 0) {
+    return { oldN: NaN, newN: NaN, notes: 0, remainder: 0 };
+  }
 
-    return { oldN, newN, notes, remainder };
-  }, [oldAmount, denom]);
+  const newN = oldN / RATE;
+
+  // توزيع الأوراق على أساس الليرة الجديدة
+  const d = denom;
+  const notes = d > 0 ? Math.floor(newN / d) : 0;
+  const remainder = d > 0 ? (newN - notes * d) : newN;
+
+  return { oldN, newN, notes, remainder };
+}, [oldAmount, denom]);
+
 
   const canCopy = Number.isFinite(computed.newN);
 
@@ -89,12 +115,17 @@ export default function Page() {
               <div className="label">بالعملة القديمة</div>
               <div className="inputRow">
                 <input
-                  className="input"
-                  value={oldAmount}
-                  onChange={(e) => setOldAmount(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="مثال: 5000"
-                />
+  className="input"
+  value={oldAmount}
+  inputMode="numeric"
+  placeholder="مثال: 1,000,000"
+  onChange={(e) => {
+    const raw = toRawInt(e.target.value);      // 88888 أو ٨٨٨٨٨ → "88888"
+    const formatted = fmtIntWithCommas(raw);   // "88888" → "88,888"
+    setOldAmount(formatted);
+  }}
+/>
+
                 <div className="unit">ل.س</div>
               </div>
               <div className="hint">أدخل المبلغ بالليرة السورية قبل التعديل</div>
@@ -103,14 +134,22 @@ export default function Page() {
             <div className="field">
               <div className="label">بالعملة الجديدة (المعدلة)</div>
               <div className="inputRow">
-                <div className="unit" style={{ color: "var(--brand2)" }}>ل.س</div>
-                <div
-                  className="input"
-                  style={{ textAlign: "left", color: "var(--brand2)" }}
-                >
-                  {Number.isFinite(computed.newN) ? fmt(computed.newN) : "—"}
-                </div>
-              </div>
+  <div
+    className="input"
+    style={{
+      textAlign: "right",
+      color: "var(--brand2)",
+      direction: "ltr"
+    }}
+  >
+    {Number.isFinite(computed.newN) ? fmt(computed.newN) : "—"}
+  </div>
+
+  <div className="unit" style={{ color: "var(--brand2)" }}>
+    ل.س
+  </div>
+</div>
+
               <div className="hint">المبلغ الناتج بعد حذف صفرين من القيمة الحالية</div>
             </div>
           </div>
@@ -118,9 +157,14 @@ export default function Page() {
           <div className="row" style={{ marginTop: 12, justifyContent: "space-between" }}>
             <div className="quick" style={{ flex: 1 }}>
               {quickOld.map((q) => (
-                <button key={q.value} className="qbtn" onClick={() => setOldAmount(String(q.value))}>
-                  {q.label}
-                </button>
+                <button
+  key={q.value}
+  className="qbtn"
+  onClick={() => setOldAmount(fmtIntWithCommas(String(q.value)))}
+>
+  {q.label}
+</button>
+
               ))}
             </div>
           </div>
